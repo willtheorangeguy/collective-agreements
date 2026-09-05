@@ -1,0 +1,112 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Submit an agreement">
+  <h1 class="text-3xl font-bold">Submit a collective agreement</h1>
+  <p class="mt-2 max-w-3xl text-stone-600">
+    Only submit agreements that are publicly available (e.g. published by a union, employer,
+    labour ministry, or official registry). Include the public URL where you found the document.
+    After submission our AI will analyse it and publish a summary page within minutes.
+  </p>
+
+  <form id="submit-form" class="mt-8 max-w-3xl space-y-5">
+    <label class="block text-sm font-medium">
+      Source URL <span class="text-red-700">*</span>
+      <input name="source_url" type="url" required placeholder="https://…"
+        class="mt-1 w-full rounded border border-stone-300 px-3 py-2" />
+    </label>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <label class="block text-sm font-medium">
+        Country codes (comma-separated, ISO-2)
+        <input name="country_codes" required placeholder="e.g. DE, AT"
+          class="mt-1 w-full rounded border border-stone-300 px-3 py-2 uppercase" />
+      </label>
+      <label class="block text-sm font-medium">
+        Sector (optional)
+        <input name="sector" placeholder="e.g. metal industry"
+          class="mt-1 w-full rounded border border-stone-300 px-3 py-2" />
+      </label>
+    </div>
+    <label class="block text-sm font-medium">
+      Document file (PDF, TXT, PNG, JPG; max 25 MB)
+      <input name="file" type="file" accept=".pdf,.txt,.png,.jpg,.jpeg,.tif,.tiff"
+        class="mt-1 w-full rounded border border-stone-300 px-3 py-2" />
+    </label>
+    <label class="block text-sm font-medium">
+      …or paste the agreement text
+      <textarea name="text" rows="10" placeholder="Paste at least 1000 characters of the agreement text"
+        class="mt-1 w-full rounded border border-stone-300 px-3 py-2"></textarea>
+    </label>
+    <button type="submit" class="rounded bg-stone-900 px-5 py-2.5 font-medium text-white hover:bg-stone-700">
+      Submit for AI analysis
+    </button>
+    <p id="status" class="text-sm"></p>
+  </form>
+
+  <script>
+    const form = document.getElementById("submit-form") as HTMLFormElement;
+    const status = document.getElementById("status")!;
+    const submitBtn = form.querySelector("button[type=submit]") as HTMLButtonElement;
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      status.textContent = "";
+      submitBtn.disabled = true;
+      const fd = new FormData(form);
+      const file = fd.get("file") as File;
+      const text = String(fd.get("text") ?? "").trim();
+      if ((!file || file.size === 0) && text.length < 1000) {
+        status.textContent = "Provide a file or paste at least 1000 characters.";
+        submitBtn.disabled = false;
+        return;
+      }
+      const meta = {
+        source_url: fd.get("source_url"),
+        country_codes: String(fd.get("country_codes"))
+          .split(",")
+          .map((s) => s.trim().toUpperCase())
+          .filter(Boolean),
+        sector: String(fd.get("sector") ?? "").trim() || undefined,
+      };
+      const out = new FormData();
+      out.append("meta", JSON.stringify(meta));
+      if (file && file.size > 0) out.append("file", file);
+      else out.append("text", text);
+
+      status.textContent = "Uploading…";
+      try {
+        const res = await fetch(`${window.__API__}/submissions`, {
+          method: "POST",
+          credentials: "include",
+          body: out,
+        });
+        if (res.status === 401) {
+          status.innerHTML = `Please <a href="/login" class="underline">sign in</a> first.`;
+          submitBtn.disabled = false;
+          return;
+        }
+        const data = await res.json();
+        if (res.status === 409 && data.existing) {
+          status.innerHTML = `We already have this exact document: <a href="/agreements/${encodeURIComponent(
+            data.existing,
+          )}" class="underline">view its page</a>.`;
+          submitBtn.disabled = false;
+          return;
+        }
+        if (!res.ok) {
+          status.textContent = data.error ?? `Error ${res.status}`;
+          submitBtn.disabled = false;
+          return;
+        }
+        // The page does not exist until analysis finishes and the site rebuilds,
+        // so hand the submitter a screen that polls for it.
+        status.textContent = "Submitted — taking you to the progress page…";
+        location.href = `/agreements/pending?slug=${encodeURIComponent(data.slug)}`;
+      } catch {
+        status.textContent = "Could not reach the API.";
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</Base>

@@ -1,0 +1,154 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Edit history" noindex={true}>
+  <h1 class="text-3xl font-bold">Edit history</h1>
+  <p id="subtitle" class="mt-2 text-stone-600"></p>
+
+  <div id="history" class="mt-6">
+    <p class="text-stone-500">Loading…</p>
+  </div>
+
+  <script>
+    import { esc, fmtDateTime } from "../scripts/dom.js";
+    import { countChanges, renderDiff } from "../scripts/diff.js";
+
+    const el = document.getElementById("history")!;
+    const subtitle = document.getElementById("subtitle")!;
+    const slug = new URLSearchParams(location.search).get("slug") ?? "";
+
+    interface Rev {
+      id: string;
+      editorName: string | null;
+      isAi: boolean;
+      fields: Record<string, unknown>;
+      editSummary: string | null;
+      reviewNote: string | null;
+      status: string;
+      createdAt: string;
+      reviewedAt: string | null;
+    }
+
+    let isModerator = false;
+
+    const statusTone: Record<string, string> = {
+      approved: "bg-green-100 text-green-800",
+      pending: "bg-yellow-100 text-yellow-800",
+      rejected: "bg-red-100 text-red-800",
+    };
+
+    async function checkModerator(): Promise<void> {
+      try {
+        const res = await fetch(`${window.__API__}/auth/me`, { credentials: "include" });
+        if (!res.ok) return;
+        const me = (await res.json()) as { role: string };
+        isModerator = me.role === "moderator" || me.role === "admin";
+      } catch {
+        /* anonymous view */
+      }
+    }
+
+    async function revert(revisionId: string): Promise<void> {
+      const note = prompt("Why are you reverting to this revision?");
+      if (note === null) return;
+      const res = await fetch(
+        `${window.__API__}/moderation/agreements/${encodeURIComponent(slug)}/revert`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ revisionId, note: note.trim() || undefined }),
+        },
+      );
+      if (res.ok) {
+        await load();
+      } else {
+        const body = await res.json().catch(() => ({}) as { error?: string });
+        alert(body.error ?? `Revert failed (API ${res.status}).`);
+      }
+    }
+
+    function card(rev: Rev, previous: Rev | undefined, isCurrent: boolean): string {
+      // Diff against the previous *approved* state, which is what this revision
+      // actually changed — not against today's live content.
+      const base = previous?.fields ?? {};
+      const changed = previous ? countChanges(base, rev.fields) : 0;
+      const who = rev.isAi ? "AI analysis" : (rev.editorName ?? "unknown editor");
+      return `
+        <li class="rounded-lg border ${isCurrent ? "border-stone-900" : "border-stone-200"} bg-white p-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span class="font-medium">${esc(who)}</span>
+              <span class="ml-2 text-sm text-stone-500">${fmtDateTime(rev.createdAt)}</span>
+              ${isCurrent ? '<span class="ml-2 rounded bg-stone-900 px-2 py-0.5 text-xs text-white">live version</span>' : ""}
+            </div>
+            <span class="rounded px-2 py-0.5 text-xs font-medium ${statusTone[rev.status] ?? "bg-stone-100 text-stone-600"}">${esc(rev.status)}</span>
+          </div>
+          ${rev.editSummary ? `<p class="mt-1 text-sm text-stone-600">“${esc(rev.editSummary)}”</p>` : ""}
+          ${rev.reviewNote ? `<p class="mt-1 text-sm text-red-800">Reviewer note: ${esc(rev.reviewNote)}</p>` : ""}
+          <p class="mt-1 text-xs text-stone-400">
+            ${previous ? `${changed} field${changed === 1 ? "" : "s"} changed` : "initial version"}
+          </p>
+          <details class="mt-2">
+            <summary class="cursor-pointer text-sm text-blue-700">
+              ${previous ? "What changed" : "Initial content"}
+            </summary>
+            <div class="mt-3">${renderDiff(base, rev.fields, "No field changes.")}</div>
+          </details>
+          ${
+            isModerator && !isCurrent && rev.status === "approved"
+              ? `<button data-revert="${esc(rev.id)}" class="mt-3 rounded border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100">Restore this version</button>`
+              : ""
+          }
+        </li>`;
+    }
+
+    async function load(): Promise<void> {
+      if (!slug) {
+        el.innerHTML = '<p class="text-stone-500">No agreement selected.</p>';
+        return;
+      }
+      subtitle.innerHTML = `Every revision of <a href="/agreements/${esc(slug)}" class="underline">${esc(slug)}</a>, newest first.`;
+      try {
+        const res = await fetch(`${window.__API__}/agreements/${encodeURIComponent(slug)}/history`);
+        if (!res.ok) throw new Error();
+        const data = (await res.json()) as { items: Rev[]; currentRevisionId: string | null };
+        if (data.items.length === 0) {
+          el.innerHTML = '<p class="text-stone-500">No revisions recorded.</p>';
+          return;
+        }
+
+        // The API returns newest first. A revision's "before" is the newest
+        // approved revision that predates it.
+        const approvedOldestFirst = data.items
+          .filter((r) => r.status === "approved")
+          .slice()
+          .reverse();
+        const previousOf = new Map<string, Rev | undefined>();
+        approvedOldestFirst.forEach((rev, i) => {
+          previousOf.set(rev.id, i === 0 ? undefined : approvedOldestFirst[i - 1]);
+        });
+        // A pending or rejected revision was proposed against whatever was live
+        // at the time, approximated here by the newest approved revision before it.
+        for (const rev of data.items) {
+          if (previousOf.has(rev.id)) continue;
+          const before = approvedOldestFirst.filter((r) => r.createdAt <= rev.createdAt).pop();
+          previousOf.set(rev.id, before);
+        }
+
+        el.innerHTML = `<ul class="space-y-3">${data.items
+          .map((r) => card(r, previousOf.get(r.id), r.id === data.currentRevisionId))
+          .join("")}</ul>`;
+
+        for (const btn of Array.from(el.querySelectorAll<HTMLButtonElement>("button[data-revert]"))) {
+          btn.addEventListener("click", () => revert(btn.dataset.revert!));
+        }
+      } catch {
+        el.innerHTML = '<p class="text-red-700">Could not load history.</p>';
+      }
+    }
+
+    void checkModerator().then(load);
+  </script>
+</Base>

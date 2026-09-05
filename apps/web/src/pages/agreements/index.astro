@@ -1,0 +1,227 @@
+---
+import Base from "../../layouts/Base.astro";
+---
+
+<Base
+  title="Browse agreements"
+  description="Search collective bargaining agreements by keyword, country and sector. Full text of every submitted agreement is searchable."
+>
+  <h1 class="text-3xl font-bold">Browse agreements</h1>
+  <p class="mt-2 max-w-2xl text-stone-600">
+    Search runs over titles, summaries and the full text of every submitted document.
+  </p>
+
+  <form id="filters" class="mt-6 grid gap-3 rounded-lg border border-stone-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto_auto_auto]">
+    <label class="flex flex-col gap-1 text-sm font-medium">
+      Search
+      <input
+        name="q"
+        type="search"
+        placeholder="e.g. shift premium, parental leave, IG Metall"
+        class="rounded border border-stone-300 px-3 py-2 font-normal"
+      />
+    </label>
+    <label class="flex flex-col gap-1 text-sm font-medium">
+      Country
+      <select name="country" class="rounded border border-stone-300 px-3 py-2 font-normal">
+        <option value="">All countries</option>
+      </select>
+    </label>
+    <label class="flex flex-col gap-1 text-sm font-medium">
+      Sector
+      <input name="sector" placeholder="e.g. metal" class="rounded border border-stone-300 px-3 py-2 font-normal" />
+    </label>
+    <label class="flex flex-col gap-1 text-sm font-medium">
+      Sort
+      <select name="sort" class="rounded border border-stone-300 px-3 py-2 font-normal">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="updated">Recently edited</option>
+        <option value="title">Title A–Z</option>
+        <option value="expiry">Expiring soonest</option>
+      </select>
+    </label>
+    <div class="flex items-end gap-2">
+      <button type="submit" class="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700">
+        Search
+      </button>
+      <button type="button" id="reset" class="rounded border border-stone-300 px-4 py-2 text-sm hover:bg-stone-100">
+        Reset
+      </button>
+    </div>
+  </form>
+
+  <p id="summary" class="mt-6 text-sm text-stone-500" aria-live="polite">Loading…</p>
+  <div id="results" class="mt-3"></div>
+  <nav id="pager" class="mt-6 flex items-center justify-between gap-3"></nav>
+
+  <script>
+    import { esc, expiryNote, fmtDate } from "../../scripts/dom.js";
+    import { countryName } from "@collective/shared/countries";
+
+    const form = document.getElementById("filters") as HTMLFormElement;
+    const results = document.getElementById("results")!;
+    const summary = document.getElementById("summary")!;
+    const pager = document.getElementById("pager")!;
+    const countrySelect = form.elements.namedItem("country") as HTMLSelectElement;
+
+    const PAGE_SIZE = 25;
+    let offset = 0;
+
+    interface Item {
+      slug: string;
+      title: string;
+      countries: string[];
+      sector: string | null;
+      effectiveDate: string | null;
+      expiryDate: string | null;
+      summary: string | null;
+      hasFile: boolean;
+    }
+
+    // Filters live in the URL so a search can be linked and shared.
+    function readUrl(): void {
+      const p = new URLSearchParams(location.search);
+      for (const key of ["q", "sector", "country", "sort"] as const) {
+        const el = form.elements.namedItem(key) as HTMLInputElement | HTMLSelectElement | null;
+        if (el && p.get(key)) el.value = p.get(key)!;
+      }
+      offset = Math.max(Number(p.get("offset") ?? 0) || 0, 0);
+    }
+
+    function currentParams(): URLSearchParams {
+      const fd = new FormData(form);
+      const p = new URLSearchParams();
+      for (const key of ["q", "sector", "country", "sort"] as const) {
+        const v = String(fd.get(key) ?? "").trim();
+        if (v && !(key === "sort" && v === "newest")) p.set(key, v);
+      }
+      return p;
+    }
+
+    async function loadCountries(): Promise<void> {
+      try {
+        const res = await fetch(`${window.__API__}/agreements/facets/countries`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { items: { code: string; count: number }[] };
+        const selected = countrySelect.value;
+        countrySelect.innerHTML =
+          `<option value="">All countries</option>` +
+          data.items
+            .map((f) => `<option value="${esc(f.code)}">${esc(countryName(f.code))} (${f.count})</option>`)
+            .join("");
+        countrySelect.value = selected;
+      } catch {
+        /* facets are a nicety; the free-text filters still work without them */
+      }
+    }
+
+    function card(a: Item): string {
+      const expiry = expiryNote(a.expiryDate);
+      const tone =
+        expiry.tone === "expired"
+          ? "bg-red-100 text-red-800"
+          : expiry.tone === "soon"
+            ? "bg-amber-100 text-amber-900"
+            : expiry.tone === "ok"
+              ? "bg-green-100 text-green-800"
+              : "bg-stone-100 text-stone-600";
+      const countries = (a.countries ?? []).map((c) => esc(countryName(c))).join(", ") || "—";
+      return `
+        <li class="rounded-lg border border-stone-200 bg-white p-4 hover:border-stone-400">
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <h2 class="text-lg font-semibold">
+              <a href="/agreements/${encodeURIComponent(a.slug)}" class="hover:underline">${esc(a.title)}</a>
+            </h2>
+            <span class="rounded px-2 py-0.5 text-xs font-medium ${tone}">${esc(expiry.label)}</span>
+          </div>
+          <p class="mt-1 text-sm text-stone-500">
+            ${countries}${a.sector ? ` · ${esc(a.sector)}` : ""} · Effective ${fmtDate(a.effectiveDate)}
+            ${a.hasFile ? ` · <span class="text-stone-400">original document archived</span>` : ""}
+          </p>
+          ${a.summary ? `<p class="mt-2 line-clamp-3 text-sm text-stone-700">${esc(a.summary)}…</p>` : ""}
+        </li>`;
+    }
+
+    function renderPager(total: number): void {
+      const page = Math.floor(offset / PAGE_SIZE) + 1;
+      const pages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
+      if (pages <= 1) {
+        pager.innerHTML = "";
+        return;
+      }
+      pager.innerHTML = `
+        <button id="prev" ${offset === 0 ? "disabled" : ""}
+          class="rounded border border-stone-300 bg-white px-4 py-2 text-sm disabled:opacity-40">← Previous</button>
+        <span class="text-sm text-stone-500">Page ${page} of ${pages}</span>
+        <button id="next" ${offset + PAGE_SIZE >= total ? "disabled" : ""}
+          class="rounded border border-stone-300 bg-white px-4 py-2 text-sm disabled:opacity-40">Next →</button>`;
+      document.getElementById("prev")?.addEventListener("click", () => {
+        offset = Math.max(offset - PAGE_SIZE, 0);
+        void load();
+      });
+      document.getElementById("next")?.addEventListener("click", () => {
+        offset += PAGE_SIZE;
+        void load();
+      });
+    }
+
+    async function load(): Promise<void> {
+      const p = currentParams();
+      const url = new URL(location.href);
+      url.search = p.toString();
+      if (offset > 0) url.searchParams.set("offset", String(offset));
+      history.replaceState(null, "", url);
+
+      p.set("limit", String(PAGE_SIZE));
+      p.set("offset", String(offset));
+
+      summary.textContent = "Loading…";
+      results.innerHTML = "";
+      pager.innerHTML = "";
+      try {
+        const res = await fetch(`${window.__API__}/agreements?${p}`);
+        if (!res.ok) throw new Error(`API ${res.status}`);
+        const data = (await res.json()) as { items: Item[]; total: number };
+
+        if (data.total === 0) {
+          summary.textContent = "No agreements matched.";
+          results.innerHTML = `
+            <div class="rounded-lg border border-stone-200 bg-white p-6 text-stone-600">
+              <p>Nothing here yet for this search.</p>
+              <p class="mt-2 text-sm">
+                Try a broader keyword, clear the filters, or
+                <a href="/submit" class="underline">submit an agreement</a> yourself.
+              </p>
+            </div>`;
+          return;
+        }
+
+        const from = offset + 1;
+        const to = Math.min(offset + data.items.length, data.total);
+        summary.textContent = `Showing ${from}–${to} of ${data.total} agreement${data.total === 1 ? "" : "s"}`;
+        results.innerHTML = `<ul class="space-y-3">${data.items.map(card).join("")}</ul>`;
+        renderPager(data.total);
+      } catch {
+        summary.textContent = "";
+        results.innerHTML =
+          '<p class="rounded border border-red-200 bg-red-50 p-4 text-red-800">Could not reach the API. Is it running?</p>';
+      }
+    }
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      offset = 0;
+      void load();
+    });
+    document.getElementById("reset")?.addEventListener("click", () => {
+      form.reset();
+      offset = 0;
+      void load();
+    });
+
+    readUrl();
+    void loadCountries();
+    void load();
+  </script>
+</Base>

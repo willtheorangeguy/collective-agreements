@@ -1,0 +1,17 @@
+{
+  "name": "@collective/pipeline",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.712.0",
+    "@collective/ai": "*",
+    "@collective/db": "*",
+    "@collective/shared": "*",
+    "tesseract.js": "^5.1.1",
+    "unpdf": "^0.12.1"
+  }
+}

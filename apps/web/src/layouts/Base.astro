@@ -1,0 +1,100 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+  noindex?: boolean;
+}
+
+const {
+  title = "Collective Agreements",
+  description = "A public library of union collective agreements from around the world, summarised by AI and corrected by the community.",
+  noindex = false,
+} = Astro.props;
+
+const siteName = import.meta.env.PUBLIC_SITE_NAME ?? "Collective Agreements";
+const apiUrl = import.meta.env.PUBLIC_API_URL ?? "http://localhost:3000";
+const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined;
+const fullTitle = title === siteName ? siteName : `${title} · ${siteName}`;
+
+const navLinks = [
+  { href: "/agreements/", label: "Browse" },
+  { href: "/changes", label: "Recent changes" },
+  { href: "/submit", label: "Submit" },
+  { href: "/contribute", label: "Contribute" },
+  { href: "/about", label: "About" },
+];
+const path = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    {canonical && <link rel="canonical" href={canonical} />}
+    {noindex && <meta name="robots" content="noindex, follow" />}
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={siteName} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    {canonical && <meta property="og:url" content={canonical} />}
+    <meta name="twitter:card" content="summary" />
+    <link rel="alternate" type="application/atom+xml" title={`${siteName} — recent changes`} href="/changes.xml" />
+  </head>
+  <body class="flex min-h-screen flex-col bg-stone-50 text-stone-900 antialiased">
+    <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:m-2 focus:rounded focus:bg-stone-900 focus:px-3 focus:py-2 focus:text-white">
+      Skip to content
+    </a>
+    <header class="border-b border-stone-200 bg-white">
+      <nav class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <a href="/" class="text-lg font-bold tracking-tight">{siteName}</a>
+        <div class="flex flex-wrap items-center gap-4 text-sm">
+          {navLinks.map((link) => (
+            <a
+              href={link.href}
+              class:list={[
+                "hover:underline",
+                path === link.href || (link.href !== "/" && path.startsWith(link.href))
+                  ? "font-semibold text-stone-900 underline"
+                  : "text-stone-600",
+              ]}
+            >
+              {link.label}
+            </a>
+          ))}
+          <span id="nav-auth" class="flex items-center gap-3">
+            <a href="/login" class="rounded bg-stone-900 px-3 py-1.5 text-white hover:bg-stone-700">Sign in</a>
+          </span>
+        </div>
+      </nav>
+    </header>
+
+    <main id="main" class="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+      <slot />
+    </main>
+
+    <footer class="mt-16 border-t border-stone-200 bg-white py-8 text-center text-sm text-stone-500">
+      <p class="mx-auto max-w-2xl px-4">
+        AI-generated information is provided as-is and may contain errors. Nothing here is legal
+        advice. Always consult the original agreement.
+      </p>
+      <p class="mt-3">
+        <a href="/faq" class="hover:underline">FAQ</a> ·
+        <a href="/contribute" class="hover:underline">Editing guide</a> ·
+        <a href="/changes" class="hover:underline">Recent changes</a> ·
+        <a href="/about" class="hover:underline">About &amp; takedowns</a>
+      </p>
+    </footer>
+
+    <script define:vars={{ apiUrl }} is:inline>
+      window.__API__ = apiUrl;
+    </script>
+    <script>
+      import "../scripts/nav.js";
+    </script>
+  </body>
+</html>

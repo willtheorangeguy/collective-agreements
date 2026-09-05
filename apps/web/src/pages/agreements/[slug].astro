@@ -1,0 +1,355 @@
+---
+import Base from "../../layouts/Base.astro";
+import type { EditableContent } from "@collective/shared";
+import { countryName } from "@collective/shared/countries";
+
+export async function getStaticPaths() {
+  const api = import.meta.env.PUBLIC_API_URL ?? "http://localhost:3000";
+  try {
+    const list: { slug: string }[] = [];
+    let offset = 0;
+    for (;;) {
+      const res = await fetch(`${api}/agreements?limit=100&offset=${offset}`);
+      if (!res.ok) break;
+      const data = (await res.json()) as { items: { slug: string }[] };
+      list.push(...data.items);
+      if (data.items.length < 100) break;
+      offset += 100;
+    }
+    return list.map((a) => ({ params: { slug: a.slug } }));
+  } catch {
+    console.warn("API unreachable during build; no agreement pages prerendered");
+    return [];
+  }
+}
+
+const api = import.meta.env.PUBLIC_API_URL ?? "http://localhost:3000";
+const { slug } = Astro.params;
+
+interface PageData {
+  agreement: {
+    slug: string;
+    sourceUrl: string;
+    countries: string[];
+    detectedLanguage: string | null;
+    fileName: string | null;
+    fileSize: number | null;
+    mimeType: string | null;
+    hasFile: boolean;
+    createdAt: string;
+    updatedAt: string;
+  };
+  content: EditableContent;
+  isAiRevision: boolean;
+  currentRevision: { id: string; createdAt: string; editorName: string | null };
+  aiAnalysis: {
+    provider: string;
+    model: string;
+    createdAt: string;
+    language: string | null;
+    confidence: { identification: string; dates: string; provisions: string } | null;
+  } | null;
+  communityEditCount: number;
+  pendingEditCount: number;
+}
+
+let data: PageData | null = null;
+try {
+  const res = await fetch(`${api}/agreements/${slug}`);
+  if (res.ok) data = (await res.json()) as PageData;
+} catch {
+  /* handled below */
+}
+
+if (!data) {
+  return Astro.redirect("/agreements/");
+}
+
+const page = data;
+const content = page.content;
+
+const provisionLabels: [keyof EditableContent["provisions"], string][] = [
+  ["wages", "Wages"],
+  ["working_hours", "Working hours"],
+  ["overtime", "Overtime"],
+  ["leave", "Leave"],
+  ["health_and_safety", "Health & safety"],
+  ["job_security", "Job security"],
+  ["grievance_procedure", "Grievance procedure"],
+  ["union_rights", "Union rights"],
+  ["training", "Training"],
+];
+
+const partyKindLabels: Record<string, string> = {
+  union: "Union",
+  employer: "Employer",
+  employer_association: "Employer association",
+  government: "Government",
+  other: "Other",
+};
+
+const parties = content.parties ?? [];
+const otherNotable = content.provisions.other_notable ?? [];
+
+const verified = !page.isAiRevision;
+const metaDescription = content.summary_english.slice(0, 200).replace(/\s+/g, " ").trim();
+
+const confidenceTone: Record<string, string> = {
+  high: "bg-green-100 text-green-800",
+  medium: "bg-amber-100 text-amber-900",
+  low: "bg-red-100 text-red-800",
+};
+
+// Marks the page up as an archived legal document rather than a generic article,
+// so search engines index it as the record it is.
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Legislation",
+  name: content.title_english,
+  abstract: metaDescription,
+  inLanguage: page.aiAnalysis?.language ?? page.agreement.detectedLanguage ?? undefined,
+  legislationType: "CollectiveAgreement",
+  dateCreated: content.effective_date ?? undefined,
+  expires: content.expiry_date ?? undefined,
+  spatialCoverage: page.agreement.countries.map((c) => countryName(c)),
+  isBasedOn: page.agreement.sourceUrl,
+  creativeWorkStatus: verified ? "Community-reviewed" : "AI-generated, unverified",
+};
+---
+
+<Base title={content.title_english} description={metaDescription}>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
+  {
+    verified ? (
+      <div class="rounded-lg border border-stone-300 bg-white p-4 text-sm text-stone-700">
+        <strong>Community-edited.</strong> The AI summary on this page has been corrected by
+        {" "}{page.communityEditCount} community edit{page.communityEditCount === 1 ? "" : "s"}.
+        It is still not authoritative — check the original document, and nothing here is legal
+        advice.
+      </div>
+    ) : (
+      <div class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+        <strong>AI-generated content — not yet verified by anyone.</strong> This summary was
+        produced automatically by{" "}
+        <strong>
+          {page.aiAnalysis ? `${page.aiAnalysis.provider}/${page.aiAnalysis.model}` : "an AI model"}
+        </strong>
+        {" "}and no human has checked it. Anyone can correct it. Nothing here is legal advice.
+      </div>
+    )
+  }
+
+  {
+    page.pendingEditCount > 0 && (
+      <p class="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+        {page.pendingEditCount} proposed edit{page.pendingEditCount === 1 ? " is" : "s are"}{" "}
+        waiting for review.{" "}
+        <a href={`/history/?slug=${page.agreement.slug}`} class="underline">See what changed</a>
+      </p>
+    )
+  }
+
+  <div class="mt-6 flex flex-col gap-8 lg:flex-row">
+    <article class="min-w-0 flex-1">
+      <h1 class="text-3xl font-bold">{content.title_english}</h1>
+      <p class="mt-2 text-sm text-stone-500">
+        Last updated {new Date(page.currentRevision.createdAt).toLocaleDateString()}
+        {page.currentRevision.editorName ? ` by ${page.currentRevision.editorName}` : " by the AI analysis"}
+        {" · "}
+        <a href={`/history/?slug=${page.agreement.slug}`} class="underline">full history</a>
+      </p>
+
+      <section class="mt-6">
+        <h2 class="text-xl font-semibold">
+          Summary
+          <span class="text-xs font-normal text-stone-500">{verified ? "community-edited" : "AI-generated"}</span>
+        </h2>
+        <p class="mt-2 whitespace-pre-line leading-relaxed text-stone-700">{content.summary_english}</p>
+      </section>
+
+      {
+        parties.length > 0 && (
+          <section class="mt-8">
+            <h2 class="text-xl font-semibold">Parties to the agreement</h2>
+            <ul class="mt-3 flex flex-wrap gap-2">
+              {parties.map((p) => (
+                <li class="rounded-full border border-stone-300 bg-white px-3 py-1 text-sm">
+                  <span class="font-medium">{p.name}</span>
+                  <span class="ml-2 text-xs text-stone-500">{partyKindLabels[p.kind] ?? p.kind}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+
+      {
+        (content.duration_notes || content.coverage_estimate) && (
+          <section class="mt-8 grid gap-4 sm:grid-cols-2">
+            {content.duration_notes && (
+              <div class="rounded-lg border border-stone-200 bg-white p-4">
+                <h3 class="text-sm font-semibold text-stone-600">Term and duration</h3>
+                <p class="mt-1 whitespace-pre-line text-sm text-stone-700">{content.duration_notes}</p>
+              </div>
+            )}
+            {content.coverage_estimate && (
+              <div class="rounded-lg border border-stone-200 bg-white p-4">
+                <h3 class="text-sm font-semibold text-stone-600">Who it covers</h3>
+                <p class="mt-1 whitespace-pre-line text-sm text-stone-700">{content.coverage_estimate}</p>
+              </div>
+            )}
+          </section>
+        )
+      }
+
+      <section class="mt-8">
+        <h2 class="text-xl font-semibold">
+          Key provisions
+          <span class="text-xs font-normal text-stone-500">{verified ? "community-edited" : "AI-generated"}</span>
+        </h2>
+        <dl class="mt-3 divide-y divide-stone-200 rounded-lg border border-stone-200 bg-white">
+          {
+            provisionLabels.map(([key, label]) => {
+              const value = content.provisions[key];
+              return (
+                <div class="grid gap-1 p-4 sm:grid-cols-[180px_1fr]">
+                  <dt class="text-sm font-semibold text-stone-600">{label}</dt>
+                  {value ? (
+                    <dd class="whitespace-pre-line text-sm text-stone-700">{value as string}</dd>
+                  ) : (
+                    <dd class="text-sm italic text-stone-400">
+                      Not recorded —{" "}
+                      <a href={`/edit/?slug=${page.agreement.slug}`} class="underline">add it</a>
+                    </dd>
+                  )}
+                </div>
+              );
+            })
+          }
+        </dl>
+      </section>
+
+      {
+        otherNotable.length > 0 && (
+          <section class="mt-8">
+            <h2 class="text-xl font-semibold">Other notable points</h2>
+            <ul class="mt-3 list-disc space-y-1 pl-6 text-sm text-stone-700">
+              {otherNotable.map((item) => (
+                <li>{item}</li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+
+      {
+        content.notable_clauses.length > 0 && (
+          <section class="mt-8">
+            <h2 class="text-xl font-semibold">
+              Notable clauses
+              <span class="text-xs font-normal text-stone-500">quoted from the original</span>
+            </h2>
+            <ul class="mt-3 space-y-4">
+              {content.notable_clauses.map((clause) => (
+                <li class="rounded-lg border border-stone-200 bg-white p-4">
+                  <p class="text-sm font-semibold">{clause.topic}</p>
+                  <blockquote class="mt-2 border-l-4 border-stone-300 pl-3 text-sm italic text-stone-600">
+                    “{clause.quote}”
+                    {clause.page && <span class="not-italic text-stone-400"> (p. {clause.page})</span>}
+                  </blockquote>
+                  <p class="mt-2 text-sm text-stone-700">{clause.explanation}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+    </article>
+
+    <aside class="w-full shrink-0 lg:w-80">
+      <div class="rounded-lg border border-stone-200 bg-white p-5 text-sm">
+        <h2 class="mb-3 font-semibold">Agreement details</h2>
+        <dl class="space-y-2 text-stone-700">
+          <div>
+            <dt class="inline font-medium">Countries: </dt>
+            <dd class="inline">{page.agreement.countries.map((c) => countryName(c)).join(", ") || "—"}</dd>
+          </div>
+          <div><dt class="inline font-medium">Sector: </dt><dd class="inline">{content.sector ?? "—"}</dd></div>
+          <div><dt class="inline font-medium">Effective: </dt><dd class="inline">{content.effective_date ?? "—"}</dd></div>
+          <div><dt class="inline font-medium">Expiry: </dt><dd class="inline">{content.expiry_date ?? "—"}</dd></div>
+          <div>
+            <dt class="inline font-medium">Language: </dt>
+            <dd class="inline">{page.aiAnalysis?.language ?? page.agreement.detectedLanguage ?? "—"}</dd>
+          </div>
+          <div><dt class="inline font-medium">Community edits: </dt><dd class="inline">{page.communityEditCount}</dd></div>
+        </dl>
+      </div>
+
+      {
+        page.aiAnalysis?.confidence && (
+          <div class="mt-4 rounded-lg border border-stone-200 bg-white p-5 text-sm">
+            <h2 class="font-semibold">AI self-reported confidence</h2>
+            <p class="mt-1 text-xs text-stone-500">
+              How sure the model was about each part. Low confidence is where help is most useful.
+            </p>
+            <ul class="mt-3 space-y-2">
+              {[
+                ["identification", "Identifying the agreement"],
+                ["dates", "Dates and term"],
+                ["provisions", "Provisions"],
+              ].map(([key, label]) => {
+                const level = page.aiAnalysis!.confidence![key as "identification"];
+                return (
+                  <li class="flex items-center justify-between gap-2">
+                    <span class="text-stone-600">{label}</span>
+                    <span class={`rounded px-2 py-0.5 text-xs font-medium ${confidenceTone[level] ?? "bg-stone-100"}`}>
+                      {level}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )
+      }
+
+      <div class="mt-4 flex flex-col gap-2 text-sm">
+        <a
+          href={`/edit/?slug=${page.agreement.slug}`}
+          class="rounded bg-blue-700 px-4 py-2 text-center font-medium text-white hover:bg-blue-600"
+        >
+          Improve this page
+        </a>
+        <a
+          href={`/history/?slug=${page.agreement.slug}`}
+          class="rounded border border-stone-300 bg-white px-4 py-2 text-center hover:bg-stone-100"
+        >
+          View edit history
+        </a>
+        {
+          page.agreement.hasFile && (
+            <a
+              href={`${api}/agreements/${page.agreement.slug}/file`}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="rounded border border-stone-300 bg-white px-4 py-2 text-center hover:bg-stone-100"
+            >
+              Archived copy ↗
+            </a>
+          )
+        }
+        <a
+          href={page.agreement.sourceUrl}
+          target="_blank"
+          rel="noopener noreferrer nofollow"
+          class="rounded border border-stone-300 bg-white px-4 py-2 text-center hover:bg-stone-100"
+        >
+          Original source ↗
+        </a>
+      </div>
+
+      <p class="mt-3 break-all text-xs text-stone-400">Source: {page.agreement.sourceUrl}</p>
+    </aside>
+  </div>
+</Base>

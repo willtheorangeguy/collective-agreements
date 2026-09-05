@@ -1,0 +1,33 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Create account">
+  <div class="mx-auto max-w-sm">
+    <h1 class="text-2xl font-bold">Create account</h1>
+    <p class="mt-2 text-sm text-stone-600">Accounts let you submit agreements and edit analyses.</p>
+    <form id="auth-form" class="mt-6 space-y-4">
+      <label class="block text-sm font-medium">
+        Email
+        <input name="email" type="email" required autocomplete="email"
+          class="mt-1 w-full rounded border border-stone-300 px-3 py-2" />
+      </label>
+      <label class="block text-sm font-medium">
+        Password (min 8 chars)
+        <input name="password" type="password" required minlength="8" autocomplete="new-password"
+          class="mt-1 w-full rounded border border-stone-300 px-3 py-2" />
+      </label>
+      <button type="submit" class="w-full rounded bg-stone-900 px-4 py-2 font-medium text-white hover:bg-stone-700">
+        Create account
+      </button>
+      <p class="text-sm text-stone-600">
+        Already registered? <a href="/login" class="underline">Sign in</a>
+      </p>
+      <p id="status" class="text-sm"></p>
+    </form>
+  </div>
+
+  <script>
+    import "../scripts/auth.js";
+  </script>
+</Base>

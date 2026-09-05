@@ -1,0 +1,339 @@
+---
+import Base from "../layouts/Base.astro";
+
+const provisionFields: [string, string][] = [
+  ["wages", "Wages"],
+  ["working_hours", "Working hours"],
+  ["overtime", "Overtime"],
+  ["leave", "Leave"],
+  ["health_and_safety", "Health & safety"],
+  ["job_security", "Job security"],
+  ["grievance_procedure", "Grievance procedure"],
+  ["union_rights", "Union rights"],
+  ["training", "Training"],
+];
+---
+
+<Base title="Improve this page" noindex={true}>
+  <h1 class="text-3xl font-bold">Improve this agreement</h1>
+  <p class="mt-2 max-w-3xl text-stone-600">
+    Correct any AI mistakes below. Your edit is reviewed by a moderator before publishing unless
+    you are a trusted editor. Describe what you changed and, where possible, cite the relevant
+    part of the original document.
+  </p>
+  <p id="target" class="mt-2 text-sm text-stone-500"></p>
+
+  <div id="signin-warning" class="mt-4 hidden rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+    You are not signed in. <a href="/login" class="underline">Sign in</a> or
+    <a href="/register" class="underline">create an account</a> before submitting an edit.
+  </div>
+
+  <form id="edit-form" class="mt-8 max-w-3xl space-y-6">
+    <fieldset class="space-y-4 rounded-lg border border-stone-200 bg-white p-5">
+      <legend class="px-1 text-sm font-semibold text-stone-600">Identification</legend>
+      <label class="block text-sm font-medium">
+        English title
+        <input name="title_english" required class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-normal" />
+      </label>
+      <div class="grid gap-4 sm:grid-cols-3">
+        <label class="block text-sm font-medium">
+          Sector
+          <input name="sector" class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-normal" />
+        </label>
+        <label class="block text-sm font-medium">
+          Effective date
+          <input name="effective_date" type="date" class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-normal" />
+        </label>
+        <label class="block text-sm font-medium">
+          Expiry date
+          <input name="expiry_date" type="date" class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-normal" />
+        </label>
+      </div>
+      <label class="block text-sm font-medium">
+        Term and duration notes
+        <textarea name="duration_notes" rows="2" class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-normal"></textarea>
+      </label>
+      <label class="block text-sm font-medium">
+        Who it covers
+        <textarea name="coverage_estimate" rows="2" class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-normal"></textarea>
+      </label>
+    </fieldset>
+
+    <fieldset class="space-y-3 rounded-lg border border-stone-200 bg-white p-5">
+      <legend class="px-1 text-sm font-semibold text-stone-600">Parties</legend>
+      <p class="text-sm text-stone-500">Which unions, employers or associations signed this agreement.</p>
+      <div id="parties" class="space-y-2"></div>
+      <button type="button" id="add-party" class="rounded border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100">
+        + Add party
+      </button>
+    </fieldset>
+
+    <fieldset class="space-y-4 rounded-lg border border-stone-200 bg-white p-5">
+      <legend class="px-1 text-sm font-semibold text-stone-600">Summary</legend>
+      <label class="block text-sm font-medium">
+        Summary (English)
+        <textarea name="summary_english" rows="8" required class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-normal"></textarea>
+      </label>
+    </fieldset>
+
+    <fieldset class="space-y-4 rounded-lg border border-stone-200 bg-white p-5">
+      <legend class="px-1 text-sm font-semibold text-stone-600">Provisions</legend>
+      {
+        provisionFields.map(([field, label]) => (
+          <label class="block text-sm font-medium">
+            {label}
+            <textarea name={field} rows="2" class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-normal" />
+          </label>
+        ))
+      }
+      <label class="block text-sm font-medium">
+        Other notable points (one per line)
+        <textarea name="other_notable" rows="3" class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-normal"></textarea>
+      </label>
+    </fieldset>
+
+    <fieldset class="space-y-3 rounded-lg border border-stone-200 bg-white p-5">
+      <legend class="px-1 text-sm font-semibold text-stone-600">Notable clauses</legend>
+      <p class="text-sm text-stone-500">Direct quotes from the agreement with a plain-English explanation.</p>
+      <div id="clauses" class="space-y-3"></div>
+      <button type="button" id="add-clause" class="rounded border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100">
+        + Add clause
+      </button>
+    </fieldset>
+
+    <label class="block text-sm font-medium">
+      Edit summary (what did you change and why?)
+      <input name="edit_summary" required placeholder="e.g. Corrected expiry date — the PDF says 2027-03-31, p. 4"
+        class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-normal" />
+    </label>
+
+    <div class="flex items-center gap-3">
+      <button type="submit" id="save" class="rounded bg-blue-700 px-5 py-2.5 font-medium text-white hover:bg-blue-600 disabled:opacity-50">
+        Submit edit
+      </button>
+      <a id="cancel" href="/agreements/" class="text-sm underline">Cancel</a>
+    </div>
+    <p id="status" class="text-sm" aria-live="polite"></p>
+  </form>
+
+  <script>
+    import { esc } from "../scripts/dom.js";
+
+    const form = document.getElementById("edit-form") as HTMLFormElement;
+    const status = document.getElementById("status")!;
+    const target = document.getElementById("target")!;
+    const saveBtn = document.getElementById("save") as HTMLButtonElement;
+    const partiesBox = document.getElementById("parties")!;
+    const clausesBox = document.getElementById("clauses")!;
+    const slug = new URLSearchParams(location.search).get("slug") ?? "";
+
+    const provisionFields = [
+      "wages",
+      "working_hours",
+      "overtime",
+      "leave",
+      "health_and_safety",
+      "job_security",
+      "grievance_procedure",
+      "union_rights",
+      "training",
+    ] as const;
+
+    const PARTY_KINDS = [
+      ["union", "Union"],
+      ["employer", "Employer"],
+      ["employer_association", "Employer association"],
+      ["government", "Government"],
+      ["other", "Other"],
+    ] as const;
+
+    interface Party {
+      name: string;
+      kind: string;
+    }
+    interface Clause {
+      topic: string;
+      quote: string;
+      page: number | null;
+      explanation: string;
+    }
+
+    /** The revision this edit was started from. Sent back so the API can reject
+     *  the edit if someone else changed the page in the meantime. */
+    let baseRevisionId: string | null = null;
+
+    function field(name: string): HTMLInputElement | HTMLTextAreaElement {
+      return form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement;
+    }
+
+    function addParty(p: Party = { name: "", kind: "union" }): void {
+      const row = document.createElement("div");
+      row.className = "flex flex-wrap gap-2";
+      row.innerHTML = `
+        <input data-k="name" value="${esc(p.name)}" placeholder="Organisation name"
+          class="min-w-0 flex-1 rounded border border-stone-300 px-3 py-2 text-sm" />
+        <select data-k="kind" class="rounded border border-stone-300 px-3 py-2 text-sm">
+          ${PARTY_KINDS.map(
+            ([v, label]) => `<option value="${v}" ${p.kind === v ? "selected" : ""}>${label}</option>`,
+          ).join("")}
+        </select>
+        <button type="button" class="rounded border border-stone-300 px-3 py-2 text-sm hover:bg-red-50">Remove</button>`;
+      row.querySelector("button")!.addEventListener("click", () => row.remove());
+      partiesBox.appendChild(row);
+    }
+
+    function addClause(cl: Clause = { topic: "", quote: "", page: null, explanation: "" }): void {
+      const row = document.createElement("div");
+      row.className = "space-y-2 rounded border border-stone-200 p-3";
+      row.innerHTML = `
+        <div class="flex gap-2">
+          <input data-k="topic" value="${esc(cl.topic)}" placeholder="Topic"
+            class="min-w-0 flex-1 rounded border border-stone-300 px-3 py-2 text-sm" />
+          <input data-k="page" type="number" min="1" value="${cl.page ?? ""}" placeholder="Page"
+            class="w-24 rounded border border-stone-300 px-3 py-2 text-sm" />
+          <button type="button" class="rounded border border-stone-300 px-3 py-2 text-sm hover:bg-red-50">Remove</button>
+        </div>
+        <textarea data-k="quote" rows="2" placeholder="Quote from the agreement"
+          class="w-full rounded border border-stone-300 px-3 py-2 text-sm">${esc(cl.quote)}</textarea>
+        <textarea data-k="explanation" rows="2" placeholder="What it means in plain English"
+          class="w-full rounded border border-stone-300 px-3 py-2 text-sm">${esc(cl.explanation)}</textarea>`;
+      row.querySelector("button")!.addEventListener("click", () => row.remove());
+      clausesBox.appendChild(row);
+    }
+
+    function readParties(): Party[] {
+      return Array.from(partiesBox.children)
+        .map((row) => ({
+          name: (row.querySelector('[data-k="name"]') as HTMLInputElement).value.trim(),
+          kind: (row.querySelector('[data-k="kind"]') as HTMLSelectElement).value,
+        }))
+        .filter((p) => p.name.length > 0);
+    }
+
+    function readClauses(): Clause[] {
+      return Array.from(clausesBox.children)
+        .map((row) => {
+          const pageRaw = (row.querySelector('[data-k="page"]') as HTMLInputElement).value.trim();
+          return {
+            topic: (row.querySelector('[data-k="topic"]') as HTMLInputElement).value.trim(),
+            quote: (row.querySelector('[data-k="quote"]') as HTMLTextAreaElement).value.trim(),
+            page: pageRaw ? Number(pageRaw) : null,
+            explanation: (row.querySelector('[data-k="explanation"]') as HTMLTextAreaElement).value.trim(),
+          };
+        })
+        .filter((cl) => cl.topic.length > 0 && cl.quote.length > 0);
+    }
+
+    async function checkAuth(): Promise<void> {
+      try {
+        const res = await fetch(`${window.__API__}/auth/me`, { credentials: "include" });
+        if (!res.ok) document.getElementById("signin-warning")!.classList.remove("hidden");
+      } catch {
+        /* the submit handler reports API problems */
+      }
+    }
+
+    async function loadCurrent(): Promise<void> {
+      if (!slug) {
+        status.textContent = "No agreement selected.";
+        saveBtn.disabled = true;
+        return;
+      }
+      document.getElementById("cancel")!.setAttribute("href", `/agreements/${slug}`);
+      try {
+        const res = await fetch(`${window.__API__}/agreements/${slug}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const c = data.content;
+        baseRevisionId = data.currentRevision?.id ?? null;
+
+        target.innerHTML = `Editing <a href="/agreements/${esc(slug)}" class="underline">${esc(
+          c.title_english ?? slug,
+        )}</a>`;
+        document.title = `Improve ${c.title_english ?? slug}`;
+
+        field("title_english").value = c.title_english ?? "";
+        field("summary_english").value = c.summary_english ?? "";
+        field("sector").value = c.sector ?? "";
+        field("effective_date").value = c.effective_date ?? "";
+        field("expiry_date").value = c.expiry_date ?? "";
+        field("duration_notes").value = c.duration_notes ?? "";
+        field("coverage_estimate").value = c.coverage_estimate ?? "";
+        for (const f of provisionFields) {
+          field(f).value = (c.provisions?.[f] as string) ?? "";
+        }
+        field("other_notable").value = (c.provisions?.other_notable ?? []).join("\n");
+        for (const p of (c.parties ?? []) as Party[]) addParty(p);
+        for (const cl of (c.notable_clauses ?? []) as Clause[]) addClause(cl);
+      } catch {
+        status.textContent = "Could not load current content.";
+        saveBtn.disabled = true;
+      }
+    }
+
+    document.getElementById("add-party")!.addEventListener("click", () => addParty());
+    document.getElementById("add-clause")!.addEventListener("click", () => addClause());
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      saveBtn.disabled = true;
+      status.textContent = "Saving…";
+
+      const provisions: Record<string, unknown> = {};
+      for (const f of provisionFields) {
+        provisions[f] = field(f).value.trim() || null;
+      }
+      provisions.other_notable = field("other_notable")
+        .value.split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const body = {
+        baseRevisionId: baseRevisionId ?? undefined,
+        fields: {
+          title_english: field("title_english").value.trim(),
+          summary_english: field("summary_english").value.trim(),
+          sector: field("sector").value.trim() || null,
+          effective_date: field("effective_date").value || null,
+          expiry_date: field("expiry_date").value || null,
+          duration_notes: field("duration_notes").value.trim() || null,
+          coverage_estimate: field("coverage_estimate").value.trim() || null,
+          parties: readParties(),
+          provisions,
+          notable_clauses: readClauses(),
+        },
+        editSummary: field("edit_summary").value.trim(),
+      };
+
+      try {
+        const res = await fetch(`${window.__API__}/agreements/${slug}/revisions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(body),
+        });
+        if (res.status === 401) {
+          status.innerHTML = `Please <a href="/login" class="underline">sign in</a> first.`;
+          saveBtn.disabled = false;
+          return;
+        }
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          status.textContent = out.error ?? `Could not submit edit (API ${res.status}).`;
+          saveBtn.disabled = false;
+          return;
+        }
+        status.innerHTML =
+          out.status === "approved"
+            ? `Edit published. <a href="/agreements/${esc(slug)}" class="underline">View the page</a> — it appears after the next site rebuild.`
+            : `Thanks — your edit is queued for review. <a href="/dashboard/me" class="underline">Track it here</a>.`;
+      } catch {
+        status.textContent = "Could not reach the API.";
+        saveBtn.disabled = false;
+      }
+    });
+
+    void checkAuth();
+    void loadCurrent();
+  </script>
+</Base>

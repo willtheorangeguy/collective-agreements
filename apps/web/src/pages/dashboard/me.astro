@@ -1,0 +1,155 @@
+---
+import Base from "../../layouts/Base.astro";
+---
+
+<Base title="My activity" noindex={true}>
+  <h1 class="text-3xl font-bold">My submissions and edits</h1>
+  <div id="account" class="mt-4"></div>
+
+  <section class="mt-8">
+    <h2 class="text-xl font-semibold">My submissions</h2>
+    <div id="subs" class="mt-3"><p class="text-stone-500">Loading…</p></div>
+  </section>
+
+  <section class="mt-8">
+    <h2 class="text-xl font-semibold">My edits</h2>
+    <div id="revs" class="mt-3"><p class="text-stone-500">Loading…</p></div>
+  </section>
+
+  <script>
+    import { esc, fmtDateTime } from "../../scripts/dom.js";
+
+    const TRUSTED_AT = 5;
+
+    interface Sub {
+      slug: string;
+      status: string;
+      createdAt: string;
+    }
+    interface Rev {
+      id: string;
+      slug: string;
+      status: string;
+      editSummary: string | null;
+      reviewNote: string | null;
+      createdAt: string;
+    }
+    interface Me {
+      displayName: string;
+      role: string;
+    }
+
+    const subsEl = document.getElementById("subs")!;
+    const revsEl = document.getElementById("revs")!;
+    const accountEl = document.getElementById("account")!;
+
+    const statusTone: Record<string, string> = {
+      published: "bg-green-100 text-green-800",
+      approved: "bg-green-100 text-green-800",
+      processing: "bg-yellow-100 text-yellow-800",
+      pending: "bg-yellow-100 text-yellow-800",
+      failed: "bg-red-100 text-red-800",
+      rejected: "bg-red-100 text-red-800",
+    };
+
+    function badge(status: string): string {
+      return `<span class="rounded px-2 py-0.5 text-xs font-medium ${
+        statusTone[status] ?? "bg-stone-100 text-stone-600"
+      }">${esc(status)}</span>`;
+    }
+
+    function signedOut(): void {
+      accountEl.innerHTML =
+        '<p class="rounded border border-stone-200 bg-white p-4"><a href="/login" class="underline">Sign in</a> to see your activity.</p>';
+      subsEl.innerHTML = "";
+      revsEl.innerHTML = "";
+    }
+
+    function renderAccount(me: Me, approvedEdits: number): void {
+      const toTrusted = Math.max(TRUSTED_AT - approvedEdits, 0);
+      accountEl.innerHTML = `
+        <div class="rounded-lg border border-stone-200 bg-white p-4 text-sm">
+          Signed in as <span class="font-medium">${esc(me.displayName)}</span>
+          <span class="rounded bg-stone-100 px-1.5 py-0.5 text-xs">${esc(me.role)}</span>
+          ${
+            me.role === "user"
+              ? `<p class="mt-1 text-stone-600">${
+                  toTrusted === 0
+                    ? "You have enough accepted edits for trusted status — a moderator will promote you shortly."
+                    : `${toTrusted} more accepted edit${toTrusted === 1 ? "" : "s"} until your edits publish without review.`
+                }</p>`
+              : '<p class="mt-1 text-stone-600">Your edits publish immediately, without moderation.</p>'
+          }
+        </div>`;
+    }
+
+    async function load(): Promise<void> {
+      let me: Me | null = null;
+      try {
+        const meRes = await fetch(`${window.__API__}/auth/me`, { credentials: "include" });
+        if (meRes.status === 401) {
+          signedOut();
+          return;
+        }
+        me = (await meRes.json()) as Me;
+
+        const [subsRes, revsRes] = await Promise.all([
+          fetch(`${window.__API__}/submissions/mine`, { credentials: "include" }),
+          fetch(`${window.__API__}/me/revisions`, { credentials: "include" }),
+        ]);
+        if (subsRes.status === 401 || revsRes.status === 401) {
+          signedOut();
+          return;
+        }
+        const subs = ((await subsRes.json()) as { items: Sub[] }).items;
+        const revs = ((await revsRes.json()) as { items: Rev[] }).items;
+
+        renderAccount(me, revs.filter((r) => r.status === "approved").length);
+
+        subsEl.innerHTML =
+          subs.length === 0
+            ? '<p class="text-sm text-stone-500">No submissions yet. <a href="/submit" class="underline">Submit an agreement</a>.</p>'
+            : `<ul class="divide-y divide-stone-200 rounded-lg border border-stone-200 bg-white">${subs
+                .map((s) => {
+                  // A processing or failed agreement has no prerendered page.
+                  const href =
+                    s.status === "published"
+                      ? `/agreements/${encodeURIComponent(s.slug)}`
+                      : `/agreements/pending?slug=${encodeURIComponent(s.slug)}`;
+                  return `
+                    <li class="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+                      <a href="${href}" class="underline">${esc(s.slug)}</a>
+                      <span class="flex items-center gap-2 text-xs text-stone-500">
+                        ${badge(s.status)} ${fmtDateTime(s.createdAt)}
+                      </span>
+                    </li>`;
+                })
+                .join("")}</ul>`;
+
+        revsEl.innerHTML =
+          revs.length === 0
+            ? '<p class="text-sm text-stone-500">No edits yet. <a href="/agreements/" class="underline">Find a page to improve</a>.</p>'
+            : `<ul class="divide-y divide-stone-200 rounded-lg border border-stone-200 bg-white">${revs
+                .map(
+                  (r) => `
+                  <li class="px-4 py-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <a href="/agreements/${encodeURIComponent(r.slug)}" class="underline">${esc(r.slug)}</a>
+                      <span class="flex items-center gap-2 text-xs text-stone-500">
+                        ${badge(r.status)} ${fmtDateTime(r.createdAt)}
+                      </span>
+                    </div>
+                    ${r.editSummary ? `<p class="mt-1 text-sm text-stone-600">“${esc(r.editSummary)}”</p>` : ""}
+                    ${r.reviewNote ? `<p class="mt-1 text-sm text-red-800">Reviewer: ${esc(r.reviewNote)}</p>` : ""}
+                  </li>`,
+                )
+                .join("")}</ul>`;
+      } catch {
+        subsEl.innerHTML = '<p class="text-red-700">Could not reach the API.</p>';
+        revsEl.innerHTML = "";
+      }
+    }
+
+    void load();
+  </script>
+</Base>

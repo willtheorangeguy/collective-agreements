@@ -1,0 +1,21 @@
+{
+  "name": "@collective/api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "worker": "tsx src/worker.ts"
+  },
+  "dependencies": {
+    "@collective/ai": "*",
+    "@collective/db": "*",
+    "@collective/pipeline": "*",
+    "@collective/shared": "*",
+    "@hono/node-server": "^1.13.7",
+    "@node-rs/argon2": "^2.0.2",
+    "dotenv": "^16.4.7",
+    "hono": "^4.6.14"
+  }
+}

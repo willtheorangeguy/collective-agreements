@@ -1,0 +1,65 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="FAQ">
+  <h1 class="text-3xl font-bold">FAQ</h1>
+  <div class="mt-6 max-w-3xl space-y-6">
+    <div>
+      <h2 class="font-semibold">Is the AI information reliable?</h2>
+      <p class="mt-1 text-stone-700">
+        Treat it as a starting point. Every page carries an unverified banner until community
+        editors have confirmed its contents, field-level confidence is shown where applicable,
+        and the original document is always one click away.
+      </p>
+    </div>
+    <div>
+      <h2 class="font-semibold">Who can edit?</h2>
+      <p class="mt-1 text-stone-700">
+        Any signed-in user can propose edits. New proposals are reviewed by moderators;
+        trusted editors (5+ accepted edits) publish instantly.
+      </p>
+    </div>
+    <div>
+      <h2 class="font-semibold">Can I submit agreements in any language?</h2>
+      <p class="mt-1 text-stone-700">
+        Yes. The AI reads the original language and writes the summary in English.
+      </p>
+    </div>
+    <div>
+      <h2 class="font-semibold">How do I find a specific provision?</h2>
+      <p class="mt-1 text-stone-700">
+        <a href="/agreements/" class="underline">Browse</a> searches titles, summaries and the
+        full text of every submitted document, and filters by country and sector. Searches are
+        linkable — copy the URL to share one.
+      </p>
+    </div>
+    <div>
+      <h2 class="font-semibold">What if the source link dies?</h2>
+      <p class="mt-1 text-stone-700">
+        Where a document was uploaded rather than pasted, we keep an archived copy and link it
+        from the agreement page alongside the original source.
+      </p>
+    </div>
+    <div>
+      <h2 class="font-semibold">How do I keep an eye on edits?</h2>
+      <p class="mt-1 text-stone-700">
+        <a href="/changes" class="underline">Recent changes</a> lists every published revision,
+        and each agreement has a full history showing exactly what each edit changed. There is
+        also an <a href="/changes.xml" class="underline">Atom feed</a>.
+      </p>
+    </div>
+    <div>
+      <h2 class="font-semibold">Are these documents copyrighted?</h2>
+      <p class="mt-1 text-stone-700">
+        Rules differ by jurisdiction; many agreements are public filings. We host only publicly
+        available documents, link the source for every one, and honour takedown requests from
+        rights holders.
+      </p>
+    </div>
+    <div>
+      <h2 class="font-semibold">Is this legal advice?</h2>
+      <p class="mt-1 text-stone-700">No.</p>
+    </div>
+  </div>
+</Base>

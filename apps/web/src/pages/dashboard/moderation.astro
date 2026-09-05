@@ -1,0 +1,164 @@
+---
+import Base from "../../layouts/Base.astro";
+---
+
+<Base title="Moderation" noindex={true}>
+  <h1 class="text-3xl font-bold">Moderation queue</h1>
+  <p class="mt-2 text-stone-600">
+    Pending community edits, oldest first. Each card shows only what the edit actually changes.
+  </p>
+
+  <div id="queue" class="mt-6 space-y-4">
+    <p class="text-stone-500">Loading…</p>
+  </div>
+
+  <section class="mt-12">
+    <h2 class="text-xl font-semibold">Recent moderation actions</h2>
+    <div id="audit" class="mt-3"><p class="text-sm text-stone-500">Loading…</p></div>
+  </section>
+
+  <script>
+    import { esc, fmtDateTime } from "../../scripts/dom.js";
+    import { countChanges, renderDiff } from "../../scripts/diff.js";
+
+    const el = document.getElementById("queue")!;
+    const auditEl = document.getElementById("audit")!;
+
+    interface PendingItem {
+      revisionId: string;
+      agreementSlug: string;
+      fields: Record<string, unknown>;
+      currentFields: Record<string, unknown> | null;
+      editSummary: string | null;
+      createdAt: string;
+      editorName: string | null;
+      editorAcceptedEdits: number | null;
+    }
+
+    async function decide(
+      revisionId: string,
+      decision: "approve" | "reject",
+      note?: string,
+    ): Promise<boolean> {
+      const r = await fetch(`${window.__API__}/moderation/revisions/${revisionId}/decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ decision, note }),
+      });
+      if (r.ok) return true;
+      const body = await r.json().catch(() => ({}) as { error?: string });
+      alert(body.error ?? `Failed (API ${r.status}) — check your role.`);
+      return false;
+    }
+
+    function card(item: PendingItem): HTMLElement {
+      const base = item.currentFields ?? {};
+      const changed = countChanges(base, item.fields);
+      const div = document.createElement("div");
+      div.className = "rounded-lg border border-stone-200 bg-white p-4";
+      div.innerHTML = `
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <a href="/agreements/${encodeURIComponent(item.agreementSlug)}" class="font-medium underline">${esc(item.agreementSlug)}</a>
+            <span class="ml-2 text-sm text-stone-500">
+              by ${esc(item.editorName ?? "unknown")}
+              ${
+                item.editorAcceptedEdits !== null
+                  ? `<span class="text-stone-400">(${item.editorAcceptedEdits} accepted)</span>`
+                  : ""
+              }
+              · ${fmtDateTime(item.createdAt)}
+              · ${changed} field${changed === 1 ? "" : "s"} changed
+            </span>
+          </div>
+          <div class="flex gap-2">
+            <button data-act="approve" class="rounded bg-green-700 px-3 py-1.5 text-sm text-white hover:bg-green-600">Approve</button>
+            <button data-act="reject" class="rounded bg-red-700 px-3 py-1.5 text-sm text-white hover:bg-red-600">Reject</button>
+          </div>
+        </div>
+        ${item.editSummary ? `<p class="mt-2 text-sm text-stone-600">“${esc(item.editSummary)}”</p>` : '<p class="mt-2 text-sm italic text-stone-400">No edit summary given.</p>'}
+        <div class="mt-3">${renderDiff(base, item.fields, "This edit changes nothing.")}</div>`;
+
+      for (const btn of Array.from(div.querySelectorAll<HTMLButtonElement>("button[data-act]"))) {
+        btn.addEventListener("click", async () => {
+          const decision = btn.dataset.act as "approve" | "reject";
+          let note: string | undefined;
+          if (decision === "reject") {
+            const answer = prompt("Reason for rejection? (shown to the editor)");
+            if (answer === null) return;
+            note = answer.trim() || undefined;
+          }
+          for (const b of Array.from(div.querySelectorAll("button"))) b.disabled = true;
+          if (await decide(item.revisionId, decision, note)) await loadAll();
+          else for (const b of Array.from(div.querySelectorAll("button"))) b.disabled = false;
+        });
+      }
+      return div;
+    }
+
+    async function loadQueue(): Promise<void> {
+      try {
+        const res = await fetch(`${window.__API__}/moderation/pending`, { credentials: "include" });
+        if (res.status === 403 || res.status === 401) {
+          el.innerHTML =
+            '<p class="rounded border border-stone-200 bg-white p-4 text-stone-600">Moderator access required. <a href="/login" class="underline">Sign in</a> with a moderator account.</p>';
+          return;
+        }
+        const data = (await res.json()) as { items: PendingItem[] };
+        if (data.items.length === 0) {
+          el.innerHTML =
+            '<p class="rounded border border-green-200 bg-green-50 p-4 text-green-800">Queue empty — nothing waiting for review.</p>';
+          return;
+        }
+        el.innerHTML = "";
+        for (const item of data.items) el.appendChild(card(item));
+      } catch {
+        el.innerHTML = '<p class="text-red-700">Could not reach the API.</p>';
+      }
+    }
+
+    async function loadAudit(): Promise<void> {
+      try {
+        const res = await fetch(`${window.__API__}/moderation/audit?limit=30`, {
+          credentials: "include",
+        });
+        if (!res.ok) {
+          auditEl.innerHTML = "";
+          return;
+        }
+        const data = (await res.json()) as {
+          items: {
+            id: string;
+            action: string;
+            targetType: string;
+            targetId: string;
+            createdAt: string;
+            actorName: string | null;
+          }[];
+        };
+        if (data.items.length === 0) {
+          auditEl.innerHTML = '<p class="text-sm text-stone-500">No actions logged yet.</p>';
+          return;
+        }
+        auditEl.innerHTML = `<ul class="divide-y divide-stone-200 rounded-lg border border-stone-200 bg-white text-sm">${data.items
+          .map(
+            (a) => `
+            <li class="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
+              <span><span class="font-mono text-xs">${esc(a.action)}</span> ${esc(a.targetType)} <span class="text-stone-400">${esc(a.targetId.slice(0, 8))}</span></span>
+              <span class="text-xs text-stone-500">${esc(a.actorName ?? "system")} · ${fmtDateTime(a.createdAt)}</span>
+            </li>`,
+          )
+          .join("")}</ul>`;
+      } catch {
+        auditEl.innerHTML = "";
+      }
+    }
+
+    async function loadAll(): Promise<void> {
+      await Promise.all([loadQueue(), loadAudit()]);
+    }
+
+    void loadAll();
+  </script>
+</Base>

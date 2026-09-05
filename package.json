@@ -1,0 +1,39 @@
+{
+  "name": "collective",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:api": "tsx watch apps/api/src/index.ts",
+    "dev:web": "npm run dev -w @collective/web",
+    "worker": "tsx watch apps/api/src/worker.ts",
+    "db:generate": "npm run generate -w @collective/db",
+    "db:migrate": "npm run migrate -w @collective/db",
+    "seed": "tsx scripts/seed.ts",
+    "typecheck": "tsc --noEmit -p packages/shared && tsc --noEmit -p packages/db && tsc --noEmit -p packages/ai && tsc --noEmit -p packages/pipeline && tsc --noEmit -p apps/api && npm run check -w @collective/web",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "allowScripts": {
+    "esbuild@0.18.20": true,
+    "esbuild@0.27.7": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.19.12": true,
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true,
+    "sharp@0.34.5": true
+  }
+}
