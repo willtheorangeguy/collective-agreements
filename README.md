@@ -2,6 +2,13 @@
 
 <h4 align="center">A public, community-reviewed library that makes collective agreements searchable and understandable.</h4>
 
+<!-- Badges -->
+<div align="center">
+  <a href="https://github.com/willtheorangeguy/collective-agreements/issues"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/willtheorangeguy/collective-agreements"></a>
+  <a href="https://github.com/willtheorangeguy/collective-agreements/pulls"><img alt="GitHub Pull Requests" src="https://img.shields.io/github/issues-pr/willtheorangeguy/collective-agreements"></a>
+  <a href="#license"><img alt="License: not provided" src="https://img.shields.io/badge/license-not%20provided-lightgrey"></a>
+</div>
+
 <p align="center">
   <a href="#key-features">Key Features</a> ·
   <a href="#installation">Installation</a> ·
