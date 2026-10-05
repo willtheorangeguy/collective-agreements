@@ -11,7 +11,8 @@
     "node": ">=22"
   },
   "overrides": {
-    "tar": "7.5.22"
+    "tar": "7.5.22",
+    "http-cache-semantics": "4.3.0"
   },
   "scripts": {
     "dev:api": "tsx watch apps/api/src/index.ts",
@@ -21,10 +22,12 @@
     "db:migrate": "npm run migrate -w @collective/db",
     "seed": "tsx scripts/seed.ts",
     "typecheck": "tsc --noEmit -p packages/shared && tsc --noEmit -p packages/db && tsc --noEmit -p packages/ai && tsc --noEmit -p packages/pipeline && tsc --noEmit -p apps/api && npm run check -w @collective/web",
-    "test": "vitest run"
+    "test": "vitest run",
+    "postinstall": "patch-package"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "patch-package": "^8.0.1",
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
