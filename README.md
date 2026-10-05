@@ -6,7 +6,7 @@
 <div align="center">
   <a href="https://github.com/willtheorangeguy/collective-agreements/issues"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/willtheorangeguy/collective-agreements"></a>
   <a href="https://github.com/willtheorangeguy/collective-agreements/pulls"><img alt="GitHub Pull Requests" src="https://img.shields.io/github/issues-pr/willtheorangeguy/collective-agreements"></a>
-  <a href="#license"><img alt="License: not provided" src="https://img.shields.io/badge/license-not%20provided-lightgrey"></a>
+  <a href="LICENSE"><img alt="GitHub License" src="https://img.shields.io/github/license/willtheorangeguy/collective-agreements"></a>
 </div>
 
 <p align="center">
@@ -71,5 +71,4 @@ editorial rules.
 
 ## License
 
-No license has been provided for this repository. See the documented issue in
-[`docs/internal/known-issues.md`](docs/internal/known-issues.md).
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

@@ -10,16 +10,6 @@
 
 **Suggested fix:** Trigger the configured rebuild after every mutation that changes published agreement content or status, ideally through a shared post-publication hook or durable rebuild job.
 
-## Medium — The repository has no license
-
-**Where:** repository root.
-
-**What:** No `LICENSE.md` or other license file is tracked.
-
-**Why it matters:** Contributors and users have no explicit permission to use, redistribute, or contribute to the source code.
-
-**Suggested fix:** Choose and add a license that reflects the intended rights for the application and, if needed, separately address hosted agreement content.
-
 ## Low — `SESSION_SECRET` is documented but unused
 
 **Where:** `.env.example` and `apps/api/src/middleware.ts`.
