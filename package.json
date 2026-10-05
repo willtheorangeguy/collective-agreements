@@ -12,7 +12,10 @@
   },
   "overrides": {
     "tar": "7.5.22",
-    "http-cache-semantics": "4.3.0"
+    "http-cache-semantics": "4.3.0",
+    "@esbuild-kit/core-utils@3.3.2": {
+      "esbuild": "0.25.12"
+    }
   },
   "scripts": {
     "dev:api": "tsx watch apps/api/src/index.ts",
