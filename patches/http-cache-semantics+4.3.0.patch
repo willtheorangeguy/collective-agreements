@@ -1,0 +1,36 @@
+diff --git a/node_modules/http-cache-semantics/index.js b/node_modules/http-cache-semantics/index.js
+index 56c2602..fdc4648 100644
+--- a/node_modules/http-cache-semantics/index.js
++++ b/node_modules/http-cache-semantics/index.js
+@@ -424,16 +424,29 @@ module.exports = class CachePolicy {
+         // the stored response is either:
+         // fresh, or allowed to be served stale
+         if (this.stale()) {
++            // maxAge() deliberately returns zero for responses that must not be
++            // reused by a shared cache. Do not let client stale directives
++            // override those security restrictions.
++            const forbidsStaleReuse =
++                !this.storable() ||
++                this._rescc['no-cache'] ||
++                (this._isShared &&
++                    (this._rescc['proxy-revalidate'] ||
++                        (this._resHeaders['set-cookie'] &&
++                            !this._rescc.public &&
++                            !this._rescc.immutable)));
++
+             // If a value is present, then the client is willing to accept a response that has
+             // exceeded its freshness lifetime by no more than the specified number of seconds
+-            const allowsStaleWithoutRevalidation = 'max-stale' in requestCC &&
++            const allowsStaleWithoutRevalidation = !forbidsStaleReuse &&
++                'max-stale' in requestCC &&
+                 (true === requestCC['max-stale'] || requestCC['max-stale'] > this.age() - this.maxAge());
+ 
+             if (allowsStaleWithoutRevalidation) {
+                 return this._evaluateRequestHitResult(undefined);
+             }
+ 
+-            if (this.useStaleWhileRevalidate()) {
++            if (!forbidsStaleReuse && this.useStaleWhileRevalidate()) {
+                 return this._evaluateRequestHitResult(this._evaluateRequestRevalidation(req, false));
+             }
+ 
