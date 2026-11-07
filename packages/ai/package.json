@@ -1,15 +1,15 @@
 {
+  "type": "module",
   "name": "@collective/ai",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
+  "dependencies": {
+    "zod": "^4.6.7",
+    "openai": "^7.43.0",
+    "@collective/shared": "*",
+    "@anthropic-ai/sdk": "^0.33.1"
+  },
   "exports": {
     ".": "./src/index.ts"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.33.1",
-    "@collective/shared": "*",
-    "openai": "^7.45.1",
-    "zod": "^4.6.7"
   }
 }
